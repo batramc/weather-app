@@ -13,11 +13,15 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       min-height: 100vh;
+      min-height: 100dvh;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background-attachment: fixed;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 20px;
+      padding: 32px 20px;
+      padding-top: max(32px, env(safe-area-inset-top));
+      padding-bottom: max(32px, env(safe-area-inset-bottom));
       color: #fff;
     }
 
@@ -260,6 +264,18 @@
     .placeholder-icon { font-size: 4rem; margin-bottom: 12px; }
     .placeholder-text { font-size: 0.95rem; }
 
+    @media (max-width: 400px) {
+      body { padding-left: 12px; padding-right: 12px; }
+
+      .card { padding: 20px; border-radius: 16px; }
+
+      .temperature { font-size: 3.2rem; }
+
+      .weather-icon { font-size: 2.8rem; }
+
+      .locate-btn { padding: 12px; }
+    }
+
     .app-header {
       display: flex;
       align-items: center;
@@ -289,6 +305,7 @@
     /* Light mode overrides */
     body.light {
       background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #93c5fd 100%);
+      background-attachment: fixed;
       color: #1a2340;
     }
 
