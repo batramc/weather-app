@@ -264,6 +264,92 @@
     .placeholder-icon { font-size: 4rem; margin-bottom: 12px; }
     .placeholder-text { font-size: 0.95rem; }
 
+    .key-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .key-form input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.07);
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .key-form input::placeholder { color: rgba(255,255,255,0.35); }
+    .key-form input:focus { border-color: #a8d8ea; }
+
+    .key-form button {
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: none;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .key-form button:hover { background: rgba(255,255,255,0.25); }
+
+    .city-photo-card {
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .city-photo-img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .city-photo-credit {
+      padding: 8px 14px;
+      font-size: 0.75rem;
+      background: rgba(0,0,0,0.35);
+      color: rgba(255,255,255,0.6);
+    }
+
+    .city-photo-credit a {
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+    }
+
+    .city-photo-credit a:hover { text-decoration: underline; }
+
+    body.light .key-form input {
+      background: rgba(255,255,255,0.5);
+      border-color: rgba(0,0,0,0.15);
+      color: #1a2340;
+    }
+
+    body.light .key-form input::placeholder { color: rgba(26,35,64,0.4); }
+    body.light .key-form input:focus { border-color: #0369a1; }
+
+    body.light .key-form button {
+      background: rgba(0,0,0,0.08);
+      color: #1a2340;
+    }
+
+    body.light .key-form button:hover { background: rgba(0,0,0,0.14); }
+
+    body.light .city-photo-card { border-color: rgba(0,0,0,0.08); }
+
+    body.light .city-photo-credit {
+      background: rgba(0,0,0,0.2);
+      color: rgba(255,255,255,0.75);
+    }
+
     @media (max-width: 400px) {
       body { padding-left: 12px; padding-right: 12px; }
 
@@ -445,6 +531,23 @@
     return { name, country, current: wxData.current, daily: wxData.daily };
   }
 
+  async function fetchCityPhoto(cityName, apiKey) {
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cityName + ' landmark')}&per_page=1&orientation=landscape`,
+      { headers: { Authorization: `Client-ID ${apiKey}` } }
+    );
+    if (!res.ok) throw new Error('Unsplash request failed');
+    const data = await res.json();
+    if (!data.results?.length) return null;
+    const photo = data.results[0];
+    return {
+      url: photo.urls.regular,
+      photographer: photo.user.name,
+      link: photo.links.html + '?utm_source=weather_app&utm_medium=referral',
+      userLink: photo.user.links.html + '?utm_source=weather_app&utm_medium=referral',
+    };
+  }
+
   function toDisplay(tempC, unit) {
     if (unit === 'F') return Math.round(tempC * 9 / 5 + 32) + 0;
     return Math.round(tempC) + 0;
@@ -457,10 +560,22 @@
     const [error, setError] = useState(null);
     const [unit, setUnit] = useState('F');
     const [theme, setTheme] = useState('dark');
+    const [unsplashKey, setUnsplashKey] = useState(() => localStorage.getItem('unsplash_key') ?? '');
+    const [keyInput, setKeyInput] = useState('');
+    const [cityPhoto, setCityPhoto] = useState(null);
 
     useEffect(() => {
       document.body.classList.toggle('light', theme === 'light');
     }, [theme]);
+
+    const handleSaveKey = useCallback((e) => {
+      e.preventDefault();
+      const key = keyInput.trim();
+      if (!key) return;
+      localStorage.setItem('unsplash_key', key);
+      setUnsplashKey(key);
+      setKeyInput('');
+    }, [keyInput]);
 
     const handleLocate = useCallback(() => {
       if (!navigator.geolocation) {
@@ -474,6 +589,10 @@
           try {
             const data = await fetchWeatherByCoords(coords.latitude, coords.longitude);
             setWeather(data);
+            setCityPhoto(null);
+            if (unsplashKey) {
+              try { setCityPhoto(await fetchCityPhoto(data.name, unsplashKey)); } catch (_) {}
+            }
           } catch (err) {
             setError(err.message);
             setWeather(null);
@@ -496,6 +615,10 @@
       try {
         const data = await fetchWeather(query.trim());
         setWeather(data);
+        setCityPhoto(null);
+        if (unsplashKey) {
+          try { setCityPhoto(await fetchCityPhoto(data.name, unsplashKey)); } catch (_) {}
+        }
       } catch (err) {
         setError(err.message);
         setWeather(null);
@@ -532,6 +655,18 @@
           Use my location
         </button>
 
+        {!unsplashKey && (
+          <form className="key-form" onSubmit={handleSaveKey}>
+            <input
+              type="text"
+              placeholder="Unsplash API key for city photos..."
+              value={keyInput}
+              onChange={e => setKeyInput(e.target.value)}
+            />
+            <button type="submit">Save</button>
+          </form>
+        )}
+
         {error && <div className="error">{error}</div>}
 
         {loading && (
@@ -548,6 +683,15 @@
                 °{unit === 'F' ? 'C' : 'F'}
               </button>
             </div>
+
+            {cityPhoto && (
+              <div className="city-photo-card">
+                <img src={cityPhoto.url} alt={`${weather.name} landmark`} className="city-photo-img" />
+                <div className="city-photo-credit">
+                  Photo by <a href={cityPhoto.userLink} target="_blank" rel="noreferrer">{cityPhoto.photographer}</a> on <a href={cityPhoto.link} target="_blank" rel="noreferrer">Unsplash</a>
+                </div>
+              </div>
+            )}
 
             <div className="card">
               <div className="current-header">
