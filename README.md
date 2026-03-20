@@ -2,6 +2,8 @@
 
 A single-file weather app built with React. No build step, no API key required.
 
+![Weather App screenshot](screenshot.png)
+
 ## Features
 
 - Search weather by city name
