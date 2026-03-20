@@ -2,6 +2,8 @@
 
 A single-file weather app built with React. No build step, no API key required.
 
+**[Live Demo](https://batramc.github.io/weather-app/)**
+
 ![Weather App screenshot](screenshot.png)
 
 ## Features
