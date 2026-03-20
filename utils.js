@@ -25,7 +25,10 @@ const WMO_CODES = {
   99: { label: 'Thunderstorm w/ Hail', icon: '⛈️' },
 };
 
-function getWeatherInfo(code) {
+function getWeatherInfo(code, isDay = true) {
+  if (!isDay && (code === 0 || code === 1)) {
+    return { label: code === 0 ? 'Clear Sky' : 'Mainly Clear', icon: '🌙' };
+  }
   return WMO_CODES[code] ?? { label: 'Unknown', icon: '🌡️' };
 }
 

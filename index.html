@@ -350,6 +350,30 @@
       color: rgba(255,255,255,0.75);
     }
 
+    .local-time {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+      margin-top: 3px;
+    }
+
+    body.light .local-time { color: rgba(26,35,64,0.5); }
+
+    .events-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .event-item {
+      padding: 9px 0;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .event-item:last-child { border-bottom: none; }
+
+    body.light .event-item { border-bottom-color: rgba(0,0,0,0.05); }
+
     @media (max-width: 400px) {
       body { padding-left: 12px; padding-right: 12px; }
 
@@ -475,9 +499,26 @@
     99: { label: 'Thunderstorm w/ Hail',icon: '⛈️' },
   };
 
-  // getWeatherInfo, toDisplay, formatDay are defined in utils.js (also used by unit tests)
-  function getWeatherInfo(code) {
+  // getWeatherInfo, toDisplay, formatDay, formatSunTime are defined in utils.js (also used by unit tests)
+  function getWeatherInfo(code, isDay = true) {
+    if (!isDay && (code === 0 || code === 1)) {
+      return { label: code === 0 ? 'Clear Sky' : 'Mainly Clear', icon: '🌙' };
+    }
     return WMO_CODES[code] ?? { label: 'Unknown', icon: '🌡️' };
+  }
+
+  function formatSunTime(isoStr) {
+    const [h, m] = isoStr.split('T')[1].split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${period}`;
+  }
+
+  async function fetchCityEvents(cityName) {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cityName + ' festival')}&limit=4&format=json&origin=*`
+    );
+    const data = await res.json();
+    return data[1]?.slice(0, 4) ?? [];
   }
 
   function formatDay(dateStr, index) {
@@ -491,8 +532,8 @@
       fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`),
       fetch(`https://api.open-meteo.com/v1/forecast?${new URLSearchParams({
         latitude, longitude,
-        current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
-        daily: 'weather_code,temperature_2m_max,temperature_2m_min',
+        current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day',
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset',
         wind_speed_unit: 'mph',
         temperature_unit: 'celsius',
         timezone: 'auto',
@@ -504,7 +545,7 @@
     const addr = revData.address ?? {};
     const name = addr.city ?? addr.town ?? addr.village ?? addr.county ?? 'My Location';
     const country = addr.country ?? '';
-    return { name, country, current: wxData.current, daily: wxData.daily };
+    return { name, country, current: wxData.current, daily: wxData.daily, timezone: wxData.timezone };
   }
 
   async function fetchWeather(city) {
@@ -518,8 +559,8 @@
 
     const params = new URLSearchParams({
       latitude, longitude,
-      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
-      daily: 'weather_code,temperature_2m_max,temperature_2m_min',
+      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset',
       wind_speed_unit: 'mph',
       temperature_unit: 'celsius',
       timezone: 'auto',
@@ -528,7 +569,7 @@
     const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
     const wxData = await wxRes.json();
 
-    return { name, country, current: wxData.current, daily: wxData.daily };
+    return { name, country, current: wxData.current, daily: wxData.daily, timezone: wxData.timezone };
   }
 
   async function fetchCityPhoto(cityName) {
@@ -558,10 +599,24 @@
     const [unit, setUnit] = useState('F');
     const [theme, setTheme] = useState('dark');
     const [cityPhoto, setCityPhoto] = useState(null);
+    const [events, setEvents] = useState([]);
+    const [localTime, setLocalTime] = useState('');
 
     useEffect(() => {
       document.body.classList.toggle('light', theme === 'light');
     }, [theme]);
+
+    useEffect(() => {
+      if (!weather?.timezone) { setLocalTime(''); return; }
+      const update = () => setLocalTime(
+        new Date().toLocaleTimeString('en-US', {
+          timeZone: weather.timezone, hour: '2-digit', minute: '2-digit', hour12: true,
+        })
+      );
+      update();
+      const id = setInterval(update, 1000);
+      return () => clearInterval(id);
+    }, [weather?.timezone]);
 
     const handleLocate = useCallback(() => {
       if (!navigator.geolocation) {
@@ -576,6 +631,8 @@
             const data = await fetchWeatherByCoords(coords.latitude, coords.longitude);
             setWeather(data);
             setCityPhoto(await fetchCityPhoto(data.name));
+            setEvents([]);
+            fetchCityEvents(data.name).then(setEvents).catch(() => {});
           } catch (err) {
             setError(err.message);
             setWeather(null);
@@ -599,6 +656,8 @@
         const data = await fetchWeather(query.trim());
         setWeather(data);
         setCityPhoto(await fetchCityPhoto(data.name));
+        setEvents([]);
+        fetchCityEvents(data.name).then(setEvents).catch(() => {});
       } catch (err) {
         setError(err.message);
         setWeather(null);
@@ -666,9 +725,10 @@
                 <div>
                   <div className="location-name">{weather.name}</div>
                   <div className="location-country">{weather.country}</div>
+                  {localTime && <div className="local-time">{localTime} local</div>}
                 </div>
                 <div className="weather-icon">
-                  {getWeatherInfo(current.weather_code).icon}
+                  {getWeatherInfo(current.weather_code, current.is_day === 1).icon}
                 </div>
               </div>
               <div className="temperature">{toDisplay(current.temperature_2m, unit)}°{unit}</div>
@@ -692,6 +752,14 @@
                     {toDisplay(daily.temperature_2m_max[0], unit)}° / {toDisplay(daily.temperature_2m_min[0], unit)}°
                   </span>
                 </div>
+                <div className="detail-item">
+                  <span className="detail-label">Sunrise</span>
+                  <span className="detail-value">🌅 {formatSunTime(daily.sunrise[0])}</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Sunset</span>
+                  <span className="detail-value">🌇 {formatSunTime(daily.sunset[0])}</span>
+                </div>
               </div>
             </div>
 
@@ -712,6 +780,17 @@
                 ))}
               </div>
             </div>
+
+            {events.length > 0 && (
+              <div className="card">
+                <div className="forecast-title">Events & Festivals</div>
+                <ul className="events-list">
+                  {events.map(name => (
+                    <li key={name} className="event-item">{name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
 

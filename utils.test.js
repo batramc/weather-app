@@ -109,6 +109,16 @@ describe('getWeatherInfo', () => {
     assert.equal(getWeatherInfo(99).label, 'Thunderstorm w/ Hail');
   });
 
+  test('returns moon icon for clear sky codes at night', () => {
+    assert.deepEqual(getWeatherInfo(0, false), { label: 'Clear Sky',    icon: '🌙' });
+    assert.deepEqual(getWeatherInfo(1, false), { label: 'Mainly Clear', icon: '🌙' });
+  });
+
+  test('non-clear codes are unchanged at night', () => {
+    assert.deepEqual(getWeatherInfo(3, false),  { label: 'Overcast', icon: '☁️' });
+    assert.deepEqual(getWeatherInfo(63, false), { label: 'Rain',     icon: '🌧️' });
+  });
+
   test('all WMO_CODES entries have a non-empty label and icon', () => {
     for (const [code, info] of Object.entries(WMO_CODES)) {
       assert.ok(typeof info.label === 'string' && info.label.length > 0, `code ${code} missing label`);
