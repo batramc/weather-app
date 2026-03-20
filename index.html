@@ -514,11 +514,29 @@
   }
 
   async function fetchCityEvents(cityName) {
-    const res = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cityName + ' festival')}&limit=4&format=json&origin=*`
+    const slug = cityName.replace(/ /g, '_');
+
+    // Try the Wikipedia category first — gives exact, well-known festival names
+    const catRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Festivals_in_${encodeURIComponent(slug)}&cmlimit=8&format=json&origin=*`
     );
-    const data = await res.json();
-    return data[1]?.slice(0, 4) ?? [];
+    const catData = await catRes.json();
+    const fromCat = catData.query?.categorymembers
+      ?.map(r => r.title)
+      ?.filter(t => !t.startsWith('List of') && !t.startsWith('Category:'))
+      ?.slice(0, 4) ?? [];
+
+    if (fromCat.length >= 2) return fromCat;
+
+    // Fallback: full-text search
+    const searchRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent('festivals in ' + cityName)}&srlimit=6&format=json&origin=*`
+    );
+    const searchData = await searchRes.json();
+    return searchData.query?.search
+      ?.map(r => r.title)
+      ?.filter(t => t !== cityName && !t.startsWith('List of') && !t.startsWith('Category:'))
+      ?.slice(0, 4) ?? [];
   }
 
   function formatDay(dateStr, index) {
