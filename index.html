@@ -531,20 +531,17 @@
     return { name, country, current: wxData.current, daily: wxData.daily };
   }
 
-  async function fetchCityPhoto(cityName, apiKey) {
+  async function fetchCityPhoto(cityName) {
     const res = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cityName + ' landmark')}&per_page=1&orientation=landscape`,
-      { headers: { Authorization: `Client-ID ${apiKey}` } }
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cityName)}`
     );
-    if (!res.ok) throw new Error('Unsplash request failed');
+    if (!res.ok) return null;
     const data = await res.json();
-    if (!data.results?.length) return null;
-    const photo = data.results[0];
+    const url = data.originalimage?.source ?? data.thumbnail?.source;
+    if (!url) return null;
     return {
-      url: photo.urls.regular,
-      photographer: photo.user.name,
-      link: photo.links.html + '?utm_source=weather_app&utm_medium=referral',
-      userLink: photo.user.links.html + '?utm_source=weather_app&utm_medium=referral',
+      url,
+      link: data.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(cityName)}`,
     };
   }
 
@@ -560,22 +557,11 @@
     const [error, setError] = useState(null);
     const [unit, setUnit] = useState('F');
     const [theme, setTheme] = useState('dark');
-    const [unsplashKey, setUnsplashKey] = useState(() => localStorage.getItem('unsplash_key') ?? '');
-    const [keyInput, setKeyInput] = useState('');
     const [cityPhoto, setCityPhoto] = useState(null);
 
     useEffect(() => {
       document.body.classList.toggle('light', theme === 'light');
     }, [theme]);
-
-    const handleSaveKey = useCallback((e) => {
-      e.preventDefault();
-      const key = keyInput.trim();
-      if (!key) return;
-      localStorage.setItem('unsplash_key', key);
-      setUnsplashKey(key);
-      setKeyInput('');
-    }, [keyInput]);
 
     const handleLocate = useCallback(() => {
       if (!navigator.geolocation) {
@@ -589,10 +575,7 @@
           try {
             const data = await fetchWeatherByCoords(coords.latitude, coords.longitude);
             setWeather(data);
-            setCityPhoto(null);
-            if (unsplashKey) {
-              try { setCityPhoto(await fetchCityPhoto(data.name, unsplashKey)); } catch (_) {}
-            }
+            setCityPhoto(await fetchCityPhoto(data.name));
           } catch (err) {
             setError(err.message);
             setWeather(null);
@@ -615,10 +598,7 @@
       try {
         const data = await fetchWeather(query.trim());
         setWeather(data);
-        setCityPhoto(null);
-        if (unsplashKey) {
-          try { setCityPhoto(await fetchCityPhoto(data.name, unsplashKey)); } catch (_) {}
-        }
+        setCityPhoto(await fetchCityPhoto(data.name));
       } catch (err) {
         setError(err.message);
         setWeather(null);
@@ -655,18 +635,6 @@
           Use my location
         </button>
 
-        {!unsplashKey && (
-          <form className="key-form" onSubmit={handleSaveKey}>
-            <input
-              type="text"
-              placeholder="Unsplash API key for city photos..."
-              value={keyInput}
-              onChange={e => setKeyInput(e.target.value)}
-            />
-            <button type="submit">Save</button>
-          </form>
-        )}
-
         {error && <div className="error">{error}</div>}
 
         {loading && (
@@ -688,7 +656,7 @@
               <div className="city-photo-card">
                 <img src={cityPhoto.url} alt={`${weather.name} landmark`} className="city-photo-img" />
                 <div className="city-photo-credit">
-                  Photo by <a href={cityPhoto.userLink} target="_blank" rel="noreferrer">{cityPhoto.photographer}</a> on <a href={cityPhoto.link} target="_blank" rel="noreferrer">Unsplash</a>
+                  Photo from <a href={cityPhoto.link} target="_blank" rel="noreferrer">Wikipedia</a>
                 </div>
               </div>
             )}
